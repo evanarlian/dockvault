@@ -15,43 +15,64 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::str;
 
-use crate::state;
-use crate::state::StateEntry;
+use crate::state::State;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct DockerAuths(HashMap<String, CredEntry>);
 
 #[derive(Serialize, Deserialize, Debug)]
-struct CredEntry {
-    auth: String,
+pub struct CredEntry {
+    #[serde(rename = "auth")]
+    auth_b64: String,
 }
 impl CredEntry {
-    fn decode(&self) -> Result<DecodedCred, Box<dyn Error>> {
-        let decoded = str::from_utf8(&BASE64_STANDARD.decode(&self.auth)?)?.to_owned();
+    pub fn decode(&self) -> Result<DecodedCred, Box<dyn Error>> {
+        let decoded = str::from_utf8(&BASE64_STANDARD.decode(&self.auth_b64)?)?.to_owned();
         let (username, _password) = decoded
             .split_once(':')
             .ok_or("unparsable base64-decoded string")?;
         Ok(DecodedCred {
-            auth: self.auth.clone(),
+            auth: self.auth_b64.clone(),
             username: username.to_owned(),
         })
     }
+    pub fn auth_b64(&self) -> &str {
+        &self.auth_b64
+    }
 }
 
-struct DecodedCred {
+pub struct DecodedCred {
     auth: String,
     username: String,
 }
+impl DecodedCred {
+    pub fn auth(&self) -> &str {
+        &self.auth
+    }
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
-struct DockerData {
+pub struct DockerData {
     auths: HashMap<String, CredEntry>,
     #[serde(flatten)]
     others: serde_json::Map<String, serde_json::Value>,
 }
+impl DockerData {
+    pub fn auths(&self) -> &HashMap<String, CredEntry> {
+        &self.auths
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
-struct DockvaultData(HashMap<String, Vec<CredEntry>>);
+pub struct DockvaultData(HashMap<String, Vec<CredEntry>>);
+impl DockvaultData {
+    pub fn data(&self) -> &HashMap<String, Vec<CredEntry>> {
+        &self.0
+    }
+}
 
 fn parse_docker_cfg(docker_cfg: &Path) -> Result<DockerData, Box<dyn Error>> {
     // if file not found, user might never login before, don't error
@@ -91,42 +112,13 @@ fn parse_dockvault_cfg(dockvault_cfg: &Path) -> Result<DockvaultData, Box<dyn Er
     Ok(dockvault_data)
 }
 
-fn make_state(docker_data: &DockerData, dockvault_data: &DockvaultData) -> Result<state::State, Box<dyn Error>> {
-    let mut state_map = BTreeMap::new();
-    // add all dockvault data to state map
-    for (registry, cred_entries) in &dockvault_data.0 {
-        let state_entries: BTreeSet<StateEntry> = cred_entries
-            .iter()
-            .filter_map(|c| c.decode().ok())
-            .map(|c| {
-                state::StateEntry::from(
-                    c.username,
-                    match docker_data.auths.get(registry) {
-                        Some(ce) => ce.auth == c.auth,
-                        None => false,
-                    },
-                    c.auth.clone(),
-                )
-            })
-            .collect();
-        state_map.insert(registry.clone(), state_entries);
-    }
-    // add all docker data to state map, there might be new stuffs
-    for (registry, cred_entry) in &docker_data.auths {
-        let state_entries = state_map.entry(registry.clone()).or_default();
-        let decoded = cred_entry.decode()?;
-        state_entries.insert(state::StateEntry::from(decoded.username, true, decoded.auth));
-    }
-    Ok(state::State::from(state_map))
-}
-
 pub fn get_application_state(
     docker_cfg: &Path,
     dockvault_cfg: &Path,
-) -> Result<state::State, Box<dyn Error>> {
+) -> Result<State, Box<dyn Error>> {
     let docker_data = parse_docker_cfg(docker_cfg)?;
     let dockvault_data = parse_dockvault_cfg(dockvault_cfg)?;
-    let state = make_state(&docker_data, &dockvault_data)?;
+    let state = State::make_state(&docker_data, &dockvault_data)?;
     Ok(state)
 }
 

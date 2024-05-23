@@ -24,10 +24,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let docker_cfg = home.join(".docker/config.json");
     let dockvault_cfg = home.join(".docker/dockvault.json");
 
-    // state means the current status of both files
-    // let mut state = get_application_state(&docker_cfg, &dockvault_cfg)?;
-    // dbg!(state);
-
     // cli
     let cli = Cli::parse();
     match cli.subcommand {
@@ -56,3 +52,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     Ok(())
 }
+
+// TODO:
+// save
+// colored output (must adhere to )
+// confirmation (interactive)
+// shell output, just fish for now
+// better error message
