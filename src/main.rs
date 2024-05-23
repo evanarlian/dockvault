@@ -1,8 +1,10 @@
-pub mod vault;
+pub mod parser;
+pub mod state;
+
 
 use clap::Parser;
 use std::error::Error;
-use vault::get_application_state;
+use parser::get_application_state;
 
 #[derive(Parser, Debug)]
 struct Cli {
