@@ -22,4 +22,19 @@ impl State {
     pub fn from(state: BTreeMap<String, BTreeSet<StateEntry>>) -> Self {
         State(state)
     }
+    pub fn print(&self) {
+        for (i, (registry, entries)) in self.0.iter().enumerate() {
+            if i != 0 {
+                println!();
+            }
+            println!("{}", registry);
+            for entry in entries {
+                let used_symbol = match entry.is_used {
+                    true => "*",
+                    false => " ",
+                };
+                println!("  {} {}", used_symbol, entry.username);
+            }
+        }
+    }
 }

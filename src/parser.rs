@@ -111,7 +111,7 @@ fn make_state(docker_data: &DockerData, dockvault_data: &DockvaultData) -> Resul
             .collect();
         state_map.insert(registry.clone(), state_entries);
     }
-    // add all docker data to state map, there might be new stuff
+    // add all docker data to state map, there might be new stuffs
     for (registry, cred_entry) in &docker_data.auths {
         let state_entries = state_map.entry(registry.clone()).or_default();
         let decoded = cred_entry.decode()?;
