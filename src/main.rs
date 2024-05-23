@@ -1,3 +1,4 @@
+use clap::Parser;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::ser::PrettyFormatter;
@@ -14,7 +15,20 @@ struct CredEntry {
 #[derive(Serialize, Deserialize, Debug)]
 struct DockerAuths(HashMap<String, CredEntry>);
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[derive(Parser, Debug)]
+struct Cli {
+    #[command(subcommand)]
+    subcommand: Subcommand,
+}
+
+#[derive(Parser, Debug, Clone)]
+enum Subcommand {
+    List,
+    Clear,
+    Use { registry: String, username: String },
+}
+
+fn main2() -> Result<(), Box<dyn Error>> {
     let home = dirs::home_dir().unwrap();
     let docker_config_path = home.join(".docker/config.json");
     let content = fs::read_to_string(docker_config_path)?;
@@ -37,5 +51,29 @@ fn main() -> Result<(), Box<dyn Error>> {
     let docker_config2_path = home.join(".docker/config2.json");
     fs::write(docker_config2_path, buf).expect("failed to write");
 
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>>{
+    // variables
+    let home = dirs::home_dir().ok_or("Cannot get home directory")?;
+    let docker_cfg = home.join(".docker/config.json");
+    let dockvault_cfg = home.join(".dockvault/auths.json");
+
+    let cli = Cli::parse();
+    match cli.subcommand {
+        Subcommand::Clear => {
+            println!("Deleted {:?}", dockvault_cfg);
+        }
+        Subcommand::List => {
+            println!("Here is the list ");
+        }
+        Subcommand::Use { registry, username } => {
+            println!(
+                "Updating main docker config to use {} {}",
+                registry, username
+            );
+        }
+    }
     Ok(())
 }
