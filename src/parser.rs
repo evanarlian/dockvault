@@ -5,6 +5,7 @@ use serde::Serialize;
 use serde_json::ser::PrettyFormatter;
 use serde_json::StreamDeserializer;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
@@ -90,26 +91,33 @@ fn parse_dockvault_cfg(dockvault_cfg: &Path) -> Result<DockvaultData, Box<dyn Er
     Ok(dockvault_data)
 }
 
-fn make_state(docker_data: &DockerData, dockvault_data: &DockvaultData) -> state::State {
+fn make_state(docker_data: &DockerData, dockvault_data: &DockvaultData) -> Result<state::State, Box<dyn Error>> {
     let mut state_map = BTreeMap::new();
+    // add all dockvault data to state map
     for (registry, cred_entries) in &dockvault_data.0 {
-        let state_entries: Vec<StateEntry> = cred_entries
+        let state_entries: BTreeSet<StateEntry> = cred_entries
             .iter()
             .filter_map(|c| c.decode().ok())
             .map(|c| {
                 state::StateEntry::from(
-                    c.auth.clone(),
                     c.username,
                     match docker_data.auths.get(registry) {
                         Some(ce) => ce.auth == c.auth,
                         None => false,
                     },
+                    c.auth.clone(),
                 )
             })
             .collect();
         state_map.insert(registry.clone(), state_entries);
     }
-    state::State::from(state_map)
+    // add all docker data to state map, there might be new stuff
+    for (registry, cred_entry) in &docker_data.auths {
+        let state_entries = state_map.entry(registry.clone()).or_default();
+        let decoded = cred_entry.decode()?;
+        state_entries.insert(state::StateEntry::from(decoded.username, true, decoded.auth));
+    }
+    Ok(state::State::from(state_map))
 }
 
 pub fn get_application_state(
@@ -118,7 +126,7 @@ pub fn get_application_state(
 ) -> Result<state::State, Box<dyn Error>> {
     let docker_data = parse_docker_cfg(docker_cfg)?;
     let dockvault_data = parse_dockvault_cfg(dockvault_cfg)?;
-    let state = make_state(&docker_data, &dockvault_data);
+    let state = make_state(&docker_data, &dockvault_data)?;
     Ok(state)
 }
 
