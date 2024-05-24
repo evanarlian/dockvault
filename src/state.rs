@@ -1,15 +1,17 @@
+use crate::parser::AuthConfig;
 use crate::parser::DockerConfig;
 use crate::parser::DockvaultConfig;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::error::Error;
 use std::str;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct StateEntry {
-    username: String,
+pub struct StateEntry<'a> {
     is_used: bool,
     auth_b64: String,
+    auth_cfg: &'a AuthConfig,
 }
 
 fn get_username_from_auth(auth_b64: &str) -> Option<String> {
@@ -23,7 +25,7 @@ fn get_username_from_auth(auth_b64: &str) -> Option<String> {
 pub struct State<'a> {
     docker_cfg: &'a mut DockerConfig,
     dockvault_cfg: &'a DockvaultConfig,
-    entries: BTreeMap<String, BTreeSet<StateEntry>>,
+    entries: BTreeMap<String, BTreeMap<String, StateEntry<'a>>>,
 }
 impl<'a> State<'a> {
     pub fn make_state(
@@ -36,16 +38,17 @@ impl<'a> State<'a> {
                 .iter()
                 .filter_map(|auth_cfg| {
                     let auth_b64 = auth_cfg.auth()?;
-                    let username = get_username_from_auth(&auth_b64)?;
+                    let username = get_username_from_auth(auth_b64)?;
                     let is_used = match docker_cfg.auth_configs().get(registry) {
                         Some(docker_auth_cfg) => docker_auth_cfg == auth_cfg,
                         None => false,
                     };
-                    Some(StateEntry {
-                        username,
+                    let state_entry = StateEntry {
                         is_used,
                         auth_b64: auth_b64.to_string(),
-                    })
+                        auth_cfg,
+                    };
+                    Some((username, state_entry))
                 })
                 .collect();
             entries.insert(registry.clone(), state_entries);
@@ -62,13 +65,26 @@ impl<'a> State<'a> {
                 println!();
             }
             println!("{}", registry);
-            for entry in entries {
-                let used_symbol = match entry.is_used {
+            for (username, state_entry) in entries {
+                let used_symbol = match state_entry.is_used {
                     true => "*",
                     false => " ",
                 };
-                println!("  {} {}", used_symbol, entry.username);
+                println!("  {} {}", used_symbol, username);
             }
         }
+    }
+    pub fn change_who(&mut self, registry: &str, username: &str) -> Result<(), Box<dyn Error>> {
+        let users_mapping = self
+            .entries
+            .get(registry)
+            .ok_or(format!("registry `{}` does not exist.", registry))?;
+        let current_user_state = users_mapping.get(username).ok_or(format!(
+            "username `{}` does not exist in registry {}.",
+            username, registry
+        ))?;
+        self.docker_cfg
+            .change_auth_cfg(registry.to_string(), current_user_state.auth_cfg.clone());
+        Ok(())
     }
 }

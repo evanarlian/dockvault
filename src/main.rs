@@ -14,7 +14,7 @@ struct Cli {
 enum Subcommand {
     List,
     Delete,
-    Use { registry: String, username: String },
+    Use { use_syntax: String },
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -41,15 +41,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         Subcommand::List => {
             let (mut docker_cfg, dockvault_cfg) =
                 parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
-            parser::save_cfg_file(&docker_cfg_path, &docker_cfg)?;
             parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
             let state = state::State::make_state(&mut docker_cfg, &dockvault_cfg);
             state.print();
-            println!("done saving");
         }
-        Subcommand::Use { registry, username } => {
+        Subcommand::Use { use_syntax } => {
+            let (mut docker_cfg, dockvault_cfg) =
+                parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
+            parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
+            let mut state = state::State::make_state(&mut docker_cfg, &dockvault_cfg);
+            let (username, registry) = use_syntax
+                .split_once('@')
+                .ok_or(format!("invalid use syntax: `{}`", use_syntax))?;
+            state.change_who(registry, username)?;
+            parser::save_cfg_file(&docker_cfg_path, &docker_cfg)?;
             println!(
-                "Updating main docker config to use {} {}",
+                "Updated docker config to use `{}` with username `{}`",
                 registry, username
             );
         }

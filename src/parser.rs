@@ -1,4 +1,3 @@
-use base64::Engine;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -31,7 +30,7 @@ pub struct AuthConfig {
 }
 impl AuthConfig {
     pub fn auth(&self) -> Option<&str> {
-        (&self.auth).as_deref()
+        self.auth.as_deref()
     }
 }
 
@@ -114,6 +113,9 @@ impl DockerConfig {
     pub fn auth_configs(&self) -> &BTreeMap<String, AuthConfig> {
         &self.auth_configs
     }
+    pub fn change_auth_cfg(&mut self, registry: String, auth_cfg: AuthConfig) {
+        self.auth_configs.insert(registry, auth_cfg);
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -129,7 +131,7 @@ pub fn save_cfg_file<T: Serialize>(cfg_path: &Path, cfg: &T) -> Result<(), Box<d
     let formatter = PrettyFormatter::with_indent(b"\t");
     let mut serializer = serde_json::Serializer::with_formatter(&mut buf, formatter);
     let val = serde_json::to_value(cfg)?;
-    val.serialize(&mut serializer);
+    val.serialize(&mut serializer)?;
     fs::write(cfg_path, buf)?;
     Ok(())
 }
