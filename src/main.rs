@@ -39,13 +39,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             };
         }
         Subcommand::List => {
-            let (docker_cfg, dockvault_cfg) =
+            let (mut docker_cfg, dockvault_cfg) =
                 parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
-            dbg!(&docker_cfg);
-            dbg!(&dockvault_cfg);
             parser::save_cfg_file(&docker_cfg_path, &docker_cfg)?;
             parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
-            // state.print();
+            let state = state::State::make_state(&mut docker_cfg, &dockvault_cfg);
+            state.print();
             println!("done saving");
         }
         Subcommand::Use { registry, username } => {
@@ -59,9 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 // TODO:
-// save
 // colored output (must adhere to )
 // confirmation (interactive)
 // shell output, just fish for now
 // better error message
-// file.go in cli, gold mine

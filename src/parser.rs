@@ -1,4 +1,3 @@
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -12,43 +11,9 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::str;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct CredEntry {
-    #[serde(rename = "auth")]
-    auth_b64: String,
-}
-impl CredEntry {
-    pub fn decode(&self) -> Result<DecodedAuthConfig, Box<dyn Error>> {
-        let decoded = str::from_utf8(&BASE64_STANDARD.decode(&self.auth_b64)?)?.to_owned();
-        let (username, _password) = decoded
-            .split_once(':')
-            .ok_or("unparsable base64-decoded string")?;
-        Ok(DecodedAuthConfig {
-            auth: self.auth_b64.clone(),
-            username: username.to_owned(),
-        })
-    }
-    pub fn auth_b64(&self) -> &str {
-        &self.auth_b64
-    }
-}
-
-pub struct DecodedAuthConfig {
-    auth: String,
-    username: String,
-}
-impl DecodedAuthConfig {
-    pub fn auth(&self) -> &str {
-        &self.auth
-    }
-    pub fn username(&self) -> &str {
-        &self.username
-    }
-}
-
 // https://github.com/docker/cli/blob/master/cli/config/types/authconfig.go
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct AuthConfig {
+pub struct AuthConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     username: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,7 +30,9 @@ struct AuthConfig {
     registrytoken: Option<String>,
 }
 impl AuthConfig {
-    fn decode() {}
+    pub fn auth(&self) -> Option<&str> {
+        (&self.auth).as_deref()
+    }
 }
 
 // https://github.com/docker/cli/blob/master/cli/config/configfile/file.go
@@ -195,30 +162,4 @@ pub fn parse_and_merge(
     let mut dockvault_cfg: DockvaultConfig = parse_cfg_file(dockvault_cfg)?;
     merge(&docker_cfg, &mut dockvault_cfg);
     Ok((docker_cfg, dockvault_cfg))
-}
-
-fn main2() -> Result<(), Box<dyn Error>> {
-    let home = dirs::home_dir().unwrap();
-    let docker_config_path = home.join(".docker/config.json");
-    let content = fs::read_to_string(docker_config_path)?;
-    let mut parsed: serde_json::Value = serde_json::from_str(&content)?;
-    let auths_value = parsed.get("auths").expect("must have auths key.").clone();
-    let auths: BTreeMap<String, CredEntry> = serde_json::from_value(auths_value)?;
-    println!("{:#?}", auths);
-    println!("{:#?}", parsed);
-    // put back
-    let mut omut = parsed.as_object_mut().expect("json is not dict-shaped.");
-    omut.insert(String::from("auths2"), serde_json::to_value(auths)?);
-    println!("{:#?}", omut);
-
-    // save to file
-    let mut buf = Vec::new();
-    let formatter = PrettyFormatter::with_indent(b"\t");
-    let mut serializer = serde_json::Serializer::with_formatter(&mut buf, formatter);
-    let obj_again = serde_json::to_value(omut).unwrap();
-    obj_again.serialize(&mut serializer);
-    let docker_config2_path = home.join(".docker/config2.json");
-    fs::write(docker_config2_path, buf).expect("failed to write");
-
-    Ok(())
 }
