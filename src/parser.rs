@@ -1,24 +1,16 @@
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::ser::PrettyFormatter;
-use serde_json::StreamDeserializer;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
-use std::fs::File;
-use std::hash::Hash;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::str;
-
-use crate::state::State;
-
-#[derive(Serialize, Deserialize, Debug)]
-struct DockerAuths(HashMap<String, CredEntry>);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CredEntry {
@@ -26,12 +18,12 @@ pub struct CredEntry {
     auth_b64: String,
 }
 impl CredEntry {
-    pub fn decode(&self) -> Result<DecodedCred, Box<dyn Error>> {
+    pub fn decode(&self) -> Result<DecodedAuthConfig, Box<dyn Error>> {
         let decoded = str::from_utf8(&BASE64_STANDARD.decode(&self.auth_b64)?)?.to_owned();
         let (username, _password) = decoded
             .split_once(':')
             .ok_or("unparsable base64-decoded string")?;
-        Ok(DecodedCred {
+        Ok(DecodedAuthConfig {
             auth: self.auth_b64.clone(),
             username: username.to_owned(),
         })
@@ -41,11 +33,11 @@ impl CredEntry {
     }
 }
 
-pub struct DecodedCred {
+pub struct DecodedAuthConfig {
     auth: String,
     username: String,
 }
-impl DecodedCred {
+impl DecodedAuthConfig {
     pub fn auth(&self) -> &str {
         &self.auth
     }
@@ -54,72 +46,155 @@ impl DecodedCred {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct DockerData {
-    auths: HashMap<String, CredEntry>,
-    #[serde(flatten)]
-    others: serde_json::Map<String, serde_json::Value>,
+// https://github.com/docker/cli/blob/master/cli/config/types/authconfig.go
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+struct AuthConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auth: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    serveraddress: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    identitytoken: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    registrytoken: Option<String>,
 }
-impl DockerData {
-    pub fn auths(&self) -> &HashMap<String, CredEntry> {
-        &self.auths
+impl AuthConfig {
+    fn decode() {}
+}
+
+// https://github.com/docker/cli/blob/master/cli/config/configfile/file.go
+#[derive(Serialize, Deserialize, Debug)]
+struct ProxyConfig {
+    #[serde(rename = "httpProxy", skip_serializing_if = "Option::is_none")]
+    http_proxy: Option<String>,
+    #[serde(rename = "httpsProxy", skip_serializing_if = "Option::is_none")]
+    https_proxy: Option<String>,
+    #[serde(rename = "noProxy", skip_serializing_if = "Option::is_none")]
+    no_proxy: Option<String>,
+    #[serde(rename = "ftpProxy", skip_serializing_if = "Option::is_none")]
+    ftp_proxy: Option<String>,
+    #[serde(rename = "allProxy", skip_serializing_if = "Option::is_none")]
+    all_proxy: Option<String>,
+}
+
+// https://github.com/docker/cli/blob/master/cli/config/configfile/file.go
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DockerConfig {
+    #[serde(default, rename = "auths")]
+    auth_configs: BTreeMap<String, AuthConfig>,
+    #[serde(rename = "HttpHeaders", skip_serializing_if = "Option::is_none")]
+    http_headers: Option<BTreeMap<String, String>>,
+    #[serde(rename = "psFormat", skip_serializing_if = "Option::is_none")]
+    ps_format: Option<String>,
+    #[serde(rename = "imagesFormat", skip_serializing_if = "Option::is_none")]
+    images_format: Option<String>,
+    #[serde(rename = "networksFormat", skip_serializing_if = "Option::is_none")]
+    networks_format: Option<String>,
+    #[serde(rename = "pluginsFormat", skip_serializing_if = "Option::is_none")]
+    plugins_format: Option<String>,
+    #[serde(rename = "volumesFormat", skip_serializing_if = "Option::is_none")]
+    volumes_format: Option<String>,
+    #[serde(rename = "statsFormat", skip_serializing_if = "Option::is_none")]
+    stats_format: Option<String>,
+    #[serde(rename = "detachKeys", skip_serializing_if = "Option::is_none")]
+    detach_keys: Option<String>,
+    #[serde(rename = "credsStore", skip_serializing_if = "Option::is_none")]
+    credential_store: Option<String>,
+    #[serde(rename = "credHelpers", skip_serializing_if = "Option::is_none")]
+    credential_helpers: Option<BTreeMap<String, String>>,
+    #[serde(
+        rename = "serviceInspectFormat",
+        skip_serializing_if = "Option::is_none"
+    )]
+    service_inspect_format: Option<String>,
+    #[serde(rename = "servicesFormat", skip_serializing_if = "Option::is_none")]
+    services_format: Option<String>,
+    #[serde(rename = "tasksFormat", skip_serializing_if = "Option::is_none")]
+    tasks_format: Option<String>,
+    #[serde(rename = "secretFormat", skip_serializing_if = "Option::is_none")]
+    secret_format: Option<String>,
+    #[serde(rename = "configFormat", skip_serializing_if = "Option::is_none")]
+    config_format: Option<String>,
+    #[serde(rename = "nodesFormat", skip_serializing_if = "Option::is_none")]
+    nodes_format: Option<String>,
+    #[serde(rename = "pruneFilters", skip_serializing_if = "Option::is_none")]
+    prune_filters: Option<Vec<String>>,
+    #[serde(rename = "proxies", skip_serializing_if = "Option::is_none")]
+    proxies: Option<BTreeMap<String, ProxyConfig>>,
+    #[serde(rename = "experimental", skip_serializing_if = "Option::is_none")]
+    experimental: Option<String>,
+    #[serde(rename = "currentContext", skip_serializing_if = "Option::is_none")]
+    current_context: Option<String>,
+    #[serde(
+        rename = "cliPluginsExtraDirs",
+        skip_serializing_if = "Option::is_none"
+    )]
+    cli_plugins_extra_dirs: Option<Vec<String>>,
+    #[serde(rename = "plugins", skip_serializing_if = "Option::is_none")]
+    plugins: Option<BTreeMap<String, BTreeMap<String, String>>>,
+    #[serde(rename = "aliases", skip_serializing_if = "Option::is_none")]
+    aliases: Option<BTreeMap<String, String>>,
+    #[serde(rename = "features", skip_serializing_if = "Option::is_none")]
+    features: Option<BTreeMap<String, String>>,
+}
+impl DockerConfig {
+    pub fn auth_configs(&self) -> &BTreeMap<String, AuthConfig> {
+        &self.auth_configs
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct DockvaultData(HashMap<String, Vec<CredEntry>>);
-impl DockvaultData {
-    pub fn data(&self) -> &HashMap<String, Vec<CredEntry>> {
+pub struct DockvaultConfig(BTreeMap<String, BTreeSet<AuthConfig>>);
+impl DockvaultConfig {
+    pub fn data(&self) -> &BTreeMap<String, BTreeSet<AuthConfig>> {
         &self.0
     }
 }
 
-fn parse_docker_cfg(docker_cfg: &Path) -> Result<DockerData, Box<dyn Error>> {
+pub fn save_cfg_file<T: Serialize>(cfg_path: &Path, cfg: &T) -> Result<(), Box<dyn Error>> {
+    let mut buf = Vec::new();
+    let formatter = PrettyFormatter::with_indent(b"\t");
+    let mut serializer = serde_json::Serializer::with_formatter(&mut buf, formatter);
+    let val = serde_json::to_value(cfg)?;
+    val.serialize(&mut serializer);
+    fs::write(cfg_path, buf)?;
+    Ok(())
+}
+
+fn parse_cfg_file<T: DeserializeOwned>(cfg_file: &Path) -> Result<T, Box<dyn Error>> {
     // if file not found, user might never login before, don't error
-    let content = match fs::read_to_string(docker_cfg) {
+    let content = match fs::read_to_string(cfg_file) {
         Ok(content) => content,
         Err(e) => match e.kind() {
             ErrorKind::NotFound => String::from("{}"),
             _ => return Err(Box::new(e)),
         },
     };
-    // if "auths" key not found, user might never login too, don't error
-    let mut json: serde_json::Value = serde_json::from_str(&content)?;
-    let map = json.as_object_mut().ok_or("json is not key-value pairs.")?;
-    let raw_auths = map
-        .entry("auths")
-        .or_insert(serde_json::Value::from("{}"))
-        .clone();
-    // remove the original auths to prevetn double key
-    map.remove("auths");
-    // actually parse auths
-    let auths = serde_json::from_value(raw_auths)?;
-    Ok(DockerData {
-        auths,
-        others: map.clone(),
-    })
+    let config: T = serde_json::from_str(&content)?;
+    Ok(config)
 }
 
-fn parse_dockvault_cfg(dockvault_cfg: &Path) -> Result<DockvaultData, Box<dyn Error>> {
-    let content = match fs::read_to_string(dockvault_cfg) {
-        Ok(content) => content,
-        Err(e) => match e.kind() {
-            ErrorKind::NotFound => String::from("{}"),
-            _ => return Err(Box::new(e)),
-        },
-    };
-    let dockvault_data = serde_json::from_str(&content)?;
-    Ok(dockvault_data)
+fn merge(docker_cfg: &DockerConfig, dockvault_cfg: &mut DockvaultConfig) {
+    for (registry, auth_cfg) in &docker_cfg.auth_configs {
+        let auths = dockvault_cfg.0.entry(registry.clone()).or_default();
+        auths.insert(auth_cfg.clone());
+    }
 }
 
-pub fn get_application_state(
+pub fn parse_and_merge(
     docker_cfg: &Path,
     dockvault_cfg: &Path,
-) -> Result<State, Box<dyn Error>> {
-    let docker_data = parse_docker_cfg(docker_cfg)?;
-    let dockvault_data = parse_dockvault_cfg(dockvault_cfg)?;
-    let state = State::make_state(&docker_data, &dockvault_data)?;
-    Ok(state)
+) -> Result<(DockerConfig, DockvaultConfig), Box<dyn Error>> {
+    let docker_cfg: DockerConfig = parse_cfg_file(docker_cfg)?;
+    let mut dockvault_cfg: DockvaultConfig = parse_cfg_file(dockvault_cfg)?;
+    merge(&docker_cfg, &mut dockvault_cfg);
+    Ok((docker_cfg, dockvault_cfg))
 }
 
 fn main2() -> Result<(), Box<dyn Error>> {
@@ -128,7 +203,7 @@ fn main2() -> Result<(), Box<dyn Error>> {
     let content = fs::read_to_string(docker_config_path)?;
     let mut parsed: serde_json::Value = serde_json::from_str(&content)?;
     let auths_value = parsed.get("auths").expect("must have auths key.").clone();
-    let auths: HashMap<String, CredEntry> = serde_json::from_value(auths_value)?;
+    let auths: BTreeMap<String, CredEntry> = serde_json::from_value(auths_value)?;
     println!("{:#?}", auths);
     println!("{:#?}", parsed);
     // put back

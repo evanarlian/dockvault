@@ -1,5 +1,5 @@
-use crate::parser::DockerData;
-use crate::parser::DockvaultData;
+use crate::parser::DockerConfig;
+use crate::parser::DockvaultConfig;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
@@ -28,37 +28,37 @@ impl State {
             }
         }
     }
-    pub fn make_state(
-        docker_data: &DockerData,
-        dockvault_data: &DockvaultData,
-    ) -> Result<State, Box<dyn Error>> {
-        let mut state_map = BTreeMap::new();
-        // add all dockvault data to state map
-        for (registry, cred_entries) in dockvault_data.data() {
-            let state_entries: BTreeSet<StateEntry> = cred_entries
-                .iter()
-                .filter_map(|c| c.decode().ok())
-                .map(|c| StateEntry {
-                    username: c.username().to_owned(),
-                    is_used: match docker_data.auths().get(registry) {
-                        Some(ce) => ce.auth_b64() == c.auth(),
-                        None => false,
-                    },
-                    auth_b64: c.auth().to_owned(),
-                })
-                .collect();
-            state_map.insert(registry.clone(), state_entries);
-        }
-        // add all docker data to state map, there might be new stuffs
-        for (registry, cred_entry) in docker_data.auths() {
-            let state_entries = state_map.entry(registry.clone()).or_default();
-            let decoded = cred_entry.decode()?;
-            state_entries.insert(StateEntry {
-                username: decoded.username().to_owned(),
-                is_used: true,
-                auth_b64: decoded.auth().to_owned(),
-            });
-        }
-        Ok(State(state_map))
-    }
+    // pub fn make_state(
+    //     docker_config: &DockerConfig,
+    //     dockvault_config: &DockvaultConfig,
+    // ) -> Result<State, Box<dyn Error>> {
+    //     let mut state_map = BTreeMap::new();
+    //     // add all dockvault data to state map
+    //     for (registry, cred_entries) in dockvault_config.data() {
+    //         let state_entries: BTreeSet<StateEntry> = cred_entries
+    //             .iter()
+    //             .filter_map(|c| c.decode().ok())
+    //             .map(|c| StateEntry {
+    //                 username: c.username().to_owned(),
+    //                 is_used: match docker_config.auths().get(registry) {
+    //                     Some(ce) => ce.auth_b64() == c.auth(),
+    //                     None => false,
+    //                 },
+    //                 auth_b64: c.auth().to_owned(),
+    //             })
+    //             .collect();
+    //         state_map.insert(registry.clone(), state_entries);
+    //     }
+    //     // add all docker data to state map, there might be new stuffs
+    //     for (registry, cred_entry) in docker_config.auths() {
+    //         let state_entries = state_map.entry(registry.clone()).or_default();
+    //         let decoded = cred_entry.decode()?;
+    //         state_entries.insert(StateEntry {
+    //             username: decoded.username().to_owned(),
+    //             is_used: true,
+    //             auth_b64: decoded.auth().to_owned(),
+    //         });
+    //     }
+    //     Ok(State(state_map))
+    // }
 }
