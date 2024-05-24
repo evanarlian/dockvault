@@ -2,19 +2,35 @@ pub mod parser;
 pub mod state;
 
 use clap::Parser;
+use clap::Subcommand;
+use clap::ValueEnum;
 use std::{error::Error, fs, io::ErrorKind};
 
 #[derive(Parser, Debug)]
+#[command(about,long_about=None)]
 struct Cli {
     #[command(subcommand)]
-    subcommand: Subcommand,
+    subcommand: DockvaultSubcommand,
 }
 
-#[derive(Parser, Debug, Clone)]
-enum Subcommand {
+#[derive(Subcommand, Debug)]
+enum DockvaultSubcommand {
     List,
     Delete,
-    Use { use_syntax: String },
+    Use {
+        use_syntax: String,
+    },
+    Shell {
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+    #[clap(hide = true)]
+    Completion,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+enum Shell {
+    Fish,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -26,7 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // cli
     let cli = Cli::parse();
     match cli.subcommand {
-        Subcommand::Delete => {
+        DockvaultSubcommand::Delete => {
             match fs::remove_file(&dockvault_cfg_path) {
                 Ok(()) => println!("Deleted {}", dockvault_cfg_path.to_string_lossy()),
                 Err(e) => match e.kind() {
@@ -37,15 +53,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                     _ => return Err(Box::new(e)),
                 },
             };
+            // TODO confirmation?
         }
-        Subcommand::List => {
+        DockvaultSubcommand::List => {
             let (mut docker_cfg, dockvault_cfg) =
                 parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
             parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
             let state = state::State::make_state(&mut docker_cfg, &dockvault_cfg);
             state.print();
         }
-        Subcommand::Use { use_syntax } => {
+        DockvaultSubcommand::Use { use_syntax } => {
             let (mut docker_cfg, dockvault_cfg) =
                 parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
             parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
@@ -59,6 +76,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "Updated docker config to use `{}` with username `{}`",
                 registry, username
             );
+        }
+        DockvaultSubcommand::Shell { shell } => match shell {
+            Shell::Fish => {
+                let fish_completions = include_str!("../completions/dockvault.fish");
+                println!("{}", fish_completions);
+            }
+        }
+        DockvaultSubcommand::Completion => {
+            let (mut docker_cfg, dockvault_cfg) =
+                parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
+            parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
+            let state = state::State::make_state(&mut docker_cfg, &dockvault_cfg);
+            state.generate_autocomplete();
         }
     }
     Ok(())

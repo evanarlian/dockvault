@@ -87,4 +87,11 @@ impl<'a> State<'a> {
             .change_auth_cfg(registry.to_string(), current_user_state.auth_cfg.clone());
         Ok(())
     }
+    pub fn generate_autocomplete(&self) {
+        for (registry, entries) in self.entries.iter() {
+            for username in entries.keys() {
+                println!("{}@{}", username, registry);
+            }
+        }
+    }
 }
