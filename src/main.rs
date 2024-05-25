@@ -1,13 +1,12 @@
 pub mod parser;
 pub mod state;
 
-use clap::Parser;
-use clap::Subcommand;
-use clap::ValueEnum;
-use std::{error::Error, fs, io::ErrorKind};
+use clap::{Parser, Subcommand, ValueEnum};
+use std::error::Error;
+use std::fs;
+use std::io::ErrorKind;
 
 #[derive(Parser, Debug)]
-#[command(about,long_about=None)]
 struct Cli {
     #[command(subcommand)]
     subcommand: DockvaultSubcommand,
@@ -37,7 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // variables
     let home = dirs::home_dir().ok_or("Cannot get home directory")?;
     let docker_cfg_path = home.join(".docker/config.json");
-    let dockvault_cfg_path = home.join(".docker/dockvault.json");
+    let dockvault_cfg_path = home.join(".dockvault/config.json");
 
     // cli
     let cli = Cli::parse();
@@ -53,7 +52,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                     _ => return Err(Box::new(e)),
                 },
             };
-            // TODO confirmation?
         }
         DockvaultSubcommand::List => {
             let (mut docker_cfg, dockvault_cfg) =
@@ -82,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let fish_completions = include_str!("../completions/dockvault.fish");
                 println!("{}", fish_completions);
             }
-        }
+        },
         DockvaultSubcommand::Completion => {
             let (mut docker_cfg, dockvault_cfg) =
                 parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
@@ -95,7 +93,5 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 // TODO:
-// colored output (must adhere to )
-// confirmation (interactive)
-// shell output, just fish for now
+// confirmation (interactive) when deleting, or when using
 // better error message

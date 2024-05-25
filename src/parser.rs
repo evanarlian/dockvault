@@ -1,9 +1,7 @@
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::ser::PrettyFormatter;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fs;
 use std::io::ErrorKind;
@@ -127,6 +125,9 @@ impl DockvaultConfig {
 }
 
 pub fn save_cfg_file<T: Serialize>(cfg_path: &Path, cfg: &T) -> Result<(), Box<dyn Error>> {
+    if let Some(parent) = cfg_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     let mut buf = Vec::new();
     let formatter = PrettyFormatter::with_indent(b"\t");
     let mut serializer = serde_json::Serializer::with_formatter(&mut buf, formatter);

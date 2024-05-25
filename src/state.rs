@@ -1,6 +1,4 @@
-use crate::parser::AuthConfig;
-use crate::parser::DockerConfig;
-use crate::parser::DockvaultConfig;
+use crate::parser::{AuthConfig, DockerConfig, DockvaultConfig};
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use std::collections::BTreeMap;
@@ -60,6 +58,10 @@ impl<'a> State<'a> {
         }
     }
     pub fn print(&self) {
+        if self.entries.is_empty() {
+            println!("You haven't logged in to any registry.");
+            return;
+        }
         for (i, (registry, entries)) in self.entries.iter().enumerate() {
             if i != 0 {
                 println!();
