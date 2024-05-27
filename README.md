@@ -13,6 +13,12 @@ dockvault shell fish > ~/.config/fish/completions/dockvault.fish
 
 # usage
 ```bash
+# merge current auth data to dockvault
+# note: most of dockvault commands will do implicit merge first
+# so `merge` is not necessary before `list` and `use`
+$ dockvault merge
+Merged all `/home/username/.docker/config.json` to `/home/username/.dockvault/config.json`
+
 # list all stored credentials and which are currently used
 $ dockvault list
 https://index.docker.io/v1/

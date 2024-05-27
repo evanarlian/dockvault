@@ -14,6 +14,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum DockvaultSubcommand {
+    Merge,
     List,
     Delete,
     Use {
@@ -41,6 +42,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     // cli
     let cli = Cli::parse();
     match cli.subcommand {
+        DockvaultSubcommand::Merge => {
+            let (_, dockvault_cfg) =
+                parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
+            parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
+            println!(
+                "Merged all `{}` to `{}`",
+                docker_cfg_path.to_string_lossy(),
+                dockvault_cfg_path.to_string_lossy()
+            )
+        }
         DockvaultSubcommand::Delete => {
             match fs::remove_file(&dockvault_cfg_path) {
                 Ok(()) => println!("Deleted {}", dockvault_cfg_path.to_string_lossy()),
