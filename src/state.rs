@@ -12,7 +12,6 @@ pub struct StateEntry<'a> {
     auth_cfg: &'a AuthConfig,
 }
 
-#[derive(Debug)]
 pub struct State<'a>(BTreeMap<String, BTreeMap<String, StateEntry<'a>>>);
 
 fn get_username_from_auth(auth_b64: &str) -> Option<String> {
