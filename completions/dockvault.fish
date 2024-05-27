@@ -1,6 +1,6 @@
 complete -c dockvault -f
 
-set -l __commands list delete use shell help
+set -l __commands merge list delete use shell help
 set -l __shells fish
 
 complete -c dockvault -n "not __fish_seen_subcommand_from $__commands" -a "$__commands"

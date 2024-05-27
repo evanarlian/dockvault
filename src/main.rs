@@ -14,6 +14,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum DockvaultSubcommand {
+    Merge,
     List,
     Delete,
     Use {
@@ -41,6 +42,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     // cli
     let cli = Cli::parse();
     match cli.subcommand {
+        DockvaultSubcommand::Merge => {
+            let (_, dockvault_cfg) =
+                parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
+            parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
+            println!(
+                "Merged all `{}` to `{}`",
+                docker_cfg_path.to_string_lossy(),
+                dockvault_cfg_path.to_string_lossy()
+            )
+        }
         DockvaultSubcommand::Delete => {
             match fs::remove_file(&dockvault_cfg_path) {
                 Ok(()) => println!("Deleted {}", dockvault_cfg_path.to_string_lossy()),
@@ -54,21 +65,21 @@ fn main() -> Result<(), Box<dyn Error>> {
             };
         }
         DockvaultSubcommand::List => {
-            let (mut docker_cfg, dockvault_cfg) =
+            let (docker_cfg, dockvault_cfg) =
                 parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
             parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
-            let state = state::State::make_state(&mut docker_cfg, &dockvault_cfg);
-            state.print();
+            let state = state::make_state(&docker_cfg, &dockvault_cfg);
+            state::print(&state);
         }
         DockvaultSubcommand::Use { use_syntax } => {
             let (mut docker_cfg, dockvault_cfg) =
                 parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
             parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
-            let mut state = state::State::make_state(&mut docker_cfg, &dockvault_cfg);
+            let state = state::make_state(&docker_cfg, &dockvault_cfg);
             let (username, registry) = use_syntax
                 .split_once('@')
                 .ok_or(format!("invalid use syntax: `{}`", use_syntax))?;
-            state.change_who(registry, username)?;
+            state::change_who(&state, &mut docker_cfg, registry, username)?;
             parser::save_cfg_file(&docker_cfg_path, &docker_cfg)?;
             println!(
                 "Updated docker config to use `{}` with username `{}`",
@@ -82,11 +93,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         },
         DockvaultSubcommand::Completion => {
-            let (mut docker_cfg, dockvault_cfg) =
+            let (docker_cfg, dockvault_cfg) =
                 parser::parse_and_merge(&docker_cfg_path, &dockvault_cfg_path)?;
             parser::save_cfg_file(&dockvault_cfg_path, &dockvault_cfg)?;
-            let state = state::State::make_state(&mut docker_cfg, &dockvault_cfg);
-            state.generate_autocomplete();
+            let state = state::make_state(&docker_cfg, &dockvault_cfg);
+            state::generate_autocomplete(&state);
         }
     }
     Ok(())
