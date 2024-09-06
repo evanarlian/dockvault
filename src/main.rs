@@ -14,12 +14,15 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum DockvaultSubcommand {
+    #[command(about = "Stores docker config to dockvault.")]
     Merge,
+    #[command(about = "Lists all users grouped by docker repository.")]
     List,
+    #[command(about = "Deletes dockvault config data.")]
     Delete,
-    Use {
-        use_syntax: String,
-    },
+    #[command(about = "Change authenticated user for specified docker repo.")]
+    Use { use_syntax: String },
+    #[command(about = "Generate shell completions.")]
     Shell {
         #[arg(value_enum)]
         shell: Shell,
